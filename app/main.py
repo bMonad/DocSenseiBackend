@@ -32,8 +32,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-  title = "DocSensei API",
-  version = "1.0.0",
+  title = get_settings().app_name,
+  version = get_settings().app_version,
   lifespan = lifespan
 )
 

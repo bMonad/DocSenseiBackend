@@ -32,3 +32,7 @@ def get_embeddings() -> LocalFastEmbeddings:
   settings = get_settings()
   log.info("Loading embedding model %s", settings.embedding_model)
   return LocalFastEmbeddings(model_name = settings.embedding_model)
+
+
+def is_embeddings_loaded() -> bool:
+  return get_embeddings.cache_info().currsize > 0
