@@ -4,7 +4,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -52,7 +52,7 @@ async def document_not_found(_: Request, __: DocumentNotFound) -> JSONResponse:
     {
     "detail": "Document not found!"
     },
-    status_code=404
+    status_code=status.HTTP_404_NOT_FOUND
   )
 
 
