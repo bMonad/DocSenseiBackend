@@ -8,6 +8,7 @@ from dataclasses import dataclass
 class Section:
   id: str
   title: str
+  level: int
   parent_id: str | None
   page_start: int
   page_end: int

@@ -199,32 +199,32 @@ def detect_font_headings(lines: list[Line]) -> list[Heading]:
     if is_big or is_numbered_bold:
       candidates.append(i)
 
-    # merge heading of same size wrapped across lines
-    groups: list[list[int]] = []
-    for i in candidates:
-      if groups: 
-        last = groups[-1][-1]
-        if i == last + 1 and lines[i].page == lines[last].page and abs(lines[i].size - lines[last].size) < 0.6:
-          groups[-1].append(i)
-          continue
-      groups.append([i])
+  # merge heading of same size wrapped across lines
+  groups: list[list[int]] = []
+  for i in candidates:
+    if groups: 
+      last = groups[-1][-1]
+      if i == last + 1 and lines[i].page == lines[last].page and abs(lines[i].size - lines[last].size) < 0.6:
+        groups[-1].append(i)
+        continue
+    groups.append([i])
 
-    if len(groups) < 2 or len(groups) > max(8, len(lines) // 6):
-      return []
+  if len(groups) < 2 or len(groups) > max(8, len(lines) // 6):
+    return []
 
-    ranked = sorted({round(lines[g[0]].size) for g in groups}, reverse=True)
-    headings = [
-      Heading(
-        level=min(ranked.index(round(lines[g[0]].size)) + 1, MAX_LEVEL),
-        title=" ".join(lines[k].text for k in g),
-        page=lines[g[0]].page,
-        start=g[0],
-        end=g[-1] + 1
-      )
-      for g in groups
-    ]
-    _normalize_levels(headings)
-    return headings
+  ranked = sorted({round(lines[g[0]].size) for g in groups}, reverse=True)
+  headings = [
+    Heading(
+      level=min(ranked.index(round(lines[g[0]].size)) + 1, MAX_LEVEL),
+      title=" ".join(lines[k].text for k in g),
+      page=lines[g[0]].page,
+      start=g[0],
+      end=g[-1] + 1
+    )
+    for g in groups
+  ]
+  _normalize_levels(headings)
+  return headings
 
 
 # ------ Section ------
@@ -261,13 +261,13 @@ def build_sections(lines: list[Line], headings: list[Heading]) -> list[Section]:
     sections.append(section)
     stack.append(section)
 
-    # Cover descendants 
-    by_id = {s.id: s for s in sections}
-    for s in reversed(sections):
-      if s.parent_id:
-        parent = by_id[s.parent_id]
-        parent.page_end = max(parent.page_end, s.page_end)
-    return sections
+  # Cover descendants 
+  by_id = {s.id: s for s in sections}
+  for s in reversed(sections):
+    if s.parent_id:
+      parent = by_id[s.parent_id]
+      parent.page_end = max(parent.page_end, s.page_end)
+  return sections
 
 
 def page_window_sections(lines: list[Line], page_count: int) -> list[Section]:
