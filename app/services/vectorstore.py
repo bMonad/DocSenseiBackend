@@ -27,6 +27,7 @@ class LocalFastEmbeddings(Embeddings):
     with self._lock:
       return next(iter(self._model.query_embed(texts))).tolist()
 
+
 @lru_cache
 def get_embeddings() -> LocalFastEmbeddings:
   settings = get_settings()

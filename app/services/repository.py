@@ -45,6 +45,21 @@ class DocumentRepository:
   def exists(self, doc_id: str) -> bool:
     return (self._dir(doc_id) / "document.json").exists()
 
+  def save(self, doc_id: str, parsed: ParsedDocument, pdf_bytes: bytes) -> None:
+    folder = self._dir(doc_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "source.pdf").write_bytes(pdf_bytes)
+    self._write_json(
+      folder / "document.json",
+      {"title": parsed.title, "page_count": parsed.page_count, "sections": [asdict(s) for s in parsed.sections]}
+    )
+
+  @staticmethod
+  def _write_json(path: Path, payload: object) -> None:
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
 
 @lru_cache
 def get_repository() -> DocumentRepository:

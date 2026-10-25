@@ -20,7 +20,8 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
-""" Health Check Endpoint """
+# ------ Health Check Endpoint ------
+
 @router.get("/health")
 def health() -> JSONResponse:
   return JSONResponse(
@@ -32,14 +33,15 @@ def health() -> JSONResponse:
   )
 
 
-""" Document Upload Endpoint """
+# ------ Document Upload Endpoint ------
+
 @router.post("/documents", response_model=DocumentOut)
 def upload_document(file: UploadFile = File(...)) -> DocumentOut:
   settings = get_settings()
   repo = get_repository()
 
   limit = settings.max_upload_mb * 1024 * 1024
-  data = file.file.read(limit+1)
+  data = file.file.read(limit + 1)
 
   if len(data) > limit:
     raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, f"File is larger than {settings.max_upload_mb} MB.")
@@ -52,3 +54,5 @@ def upload_document(file: UploadFile = File(...)) -> DocumentOut:
       parsed = parse_pdf(data, fallback_title=Path(file.filename or "Untitled").stem, max_pages = settings.max_pages)
     except ValueError as exc:
       raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
+    repo.save(doc_id, parsed, data)
+
