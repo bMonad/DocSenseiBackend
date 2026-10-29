@@ -20,12 +20,25 @@ cd DocSenseiBackend
 
 Install the required dependencies and configure the environment variables according to the project setup.
 
-👨‍💻 Developer
+---
+## Credits
 
-Shivansh Singh (bMonad)
+<div align="center">
 
-- GitHub: "@bMonad" (https://github.com/bMonad)
+**Designed and developed by -** **[bMonad (Shivansh Singh)](https://github.com/bMonad)**
+  
+### Let's Build Something Meaningful 🚀
+
+</div>
+
+If you find this project useful or inspiring, consider giving the repo a star. You're welcome to use it as a reference for your own learning, but please don't copy it as-is. Make it your own.
 
 ---
 
-⭐ If you find this project useful, consider giving it a star!
+<div align="center">
+
+**Shivansh Singh | bMonad** · Software Engineer · AI Engineer · React.js · Python · LangChain · Generative AI 
+
+Thank you for visiting this project!
+
+</div>
