@@ -14,10 +14,21 @@ from app.schemas import DocumentOut
 from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
 from app.services.pdf_parser import parse_pdf
+from app.services.vectorstore import ensure_indexed
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
+
+
+def _document_out(doc_id: str) -> DocumentOut:
+  parsed = get_repository().load(doc_id)
+  return DocumentOut(
+    id = doc_id,
+    title = parsed.title,
+    page_count = parsed.page_count,
+    outline = []
+  )
 
 
 # ------ Health Check Endpoint ------
@@ -56,3 +67,12 @@ def upload_document(file: UploadFile = File(...)) -> DocumentOut:
       raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     repo.save(doc_id, parsed, data)
 
+  ensure_indexed(doc_id, repo.load(doc_id).sections)
+  return _document_out(doc_id)
+
+
+# ----- Retrieve Document with doc_id ------ 
+
+@router.get("/documents/{doc_id}", response_model=DocumentOut)
+def get_document(doc_id: str) -> DocumentOut:
+  return _document_out(doc_id)

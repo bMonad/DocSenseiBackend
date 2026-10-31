@@ -54,6 +54,13 @@ class DocumentRepository:
       {"title": parsed.title, "page_count": parsed.page_count, "sections": [asdict(s) for s in parsed.sections]}
     )
 
+  def load(self, doc_id: str) -> ParsedDocument:
+    path = self._dir(doc_id) / "document.json"
+    if not path.exists():
+      raise DocumentNotFound(doc_id)
+    raw = json.loads(path.read_text(encoding = "utf-8"))
+    return ParsedDocument(raw["title"], raw["page_count"], [Section(**s) for s in raw["sections"]])
+
   @staticmethod
   def _write_json(path: Path, payload: object) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
