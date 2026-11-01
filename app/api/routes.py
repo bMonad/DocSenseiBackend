@@ -6,7 +6,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 import pymupdf
-from fastapi import APIRouter, HTTPException, File, UploadFile, status
+from fastapi import APIRouter, HTTPException, File, UploadFile, status, Query, Response
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
@@ -76,3 +76,18 @@ def upload_document(file: UploadFile = File(...)) -> DocumentOut:
 @router.get("/documents/{doc_id}", response_model=DocumentOut)
 def get_document(doc_id: str) -> DocumentOut:
   return _document_out(doc_id)
+
+
+# ------ Retrieve Image of page ------ 
+
+@router.get("/document/{doc_id}/pages/{page}/image")
+def page_image(doc_id: str, page: int, scale: float = Query(1.6, ge = 0.5, le = 3.0)) -> Response:
+  path = get_repository().pdf_path(doc_id)
+  with pymupdf.open(path) as pdf:
+    if not 1 <= page <= pdf.page_count:
+      raise HTTPException(status.HTTP_404_NOT_FOUND, "Page Not Found!")
+    pixmap = pdf[page - 1].get_pixmap(matrix = pymupdf.Matrix(scale, scale), alpha = False)
+    png = pixmap.tobytes("png")
+  return Response(png, media_type = "image/png", headers = {
+    "Cache-Control": "public, max-age=86400, immutable"
+  })

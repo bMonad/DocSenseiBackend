@@ -61,6 +61,12 @@ class DocumentRepository:
     raw = json.loads(path.read_text(encoding = "utf-8"))
     return ParsedDocument(raw["title"], raw["page_count"], [Section(**s) for s in raw["sections"]])
 
+  def pdf_path(self, doc_id: str) -> Path:
+    path = self._dir(doc_id) / "source.pdf"
+    if not path.exists():
+      raise DocumentNotFound(doc_id)
+    return path
+
   @staticmethod
   def _write_json(path: Path, payload: object) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
