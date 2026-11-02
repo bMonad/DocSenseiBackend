@@ -67,6 +67,12 @@ class DocumentRepository:
       raise DocumentNotFound(doc_id)
     return path
 
+  def get_summary(self, doc_id: str, section_id: str) -> str | None:
+    path = self._dir(doc_id) / "source.pdf"
+    if not path.exists():
+      raise DocumentNotFound(doc_id)
+    return path
+
   @staticmethod
   def _write_json(path: Path, payload: object) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")

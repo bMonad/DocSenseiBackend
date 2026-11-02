@@ -10,7 +10,8 @@ from fastapi import APIRouter, HTTPException, File, UploadFile, status, Query, R
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
-from app.schemas import DocumentOut
+from app.domain import Section, subtree, subtree_text
+from app.schemas import DocumentOut, SummaryOut
 from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
 from app.services.pdf_parser import parse_pdf
@@ -20,6 +21,9 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
+MIN_SUMMARY_CHARS = 80
+
+# ------ Helper methods ------
 
 def _document_out(doc_id: str) -> DocumentOut:
   parsed = get_repository().load(doc_id)
@@ -29,6 +33,15 @@ def _document_out(doc_id: str) -> DocumentOut:
     page_count = parsed.page_count,
     outline = []
   )
+
+
+def _scope(doc_id: str, section_id: str) -> tuple[list[Section], list[Section]]:
+  """All sections, the requested section + descendants. 404 if either is unknown."""
+  all_sections = get_repository().load(doc_id).sections
+  try:
+    return all_sections, subtree(all_sections, section_id)
+  except KeyError:
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Section not found!") from None
 
 
 # ------ Health Check Endpoint ------
@@ -91,3 +104,26 @@ def page_image(doc_id: str, page: int, scale: float = Query(1.6, ge = 0.5, le = 
   return Response(png, media_type = "image/png", headers = {
     "Cache-Control": "public, max-age=86400, immutable"
   })
+
+
+# ------ Section Summary Endpoint ------
+
+@router.get("/documents/{doc_id}/sections/{section_id}/summary", response_model=SummaryOut)
+def section_summary(doc_id: str, section_id: str, refresh: bool = False) -> SummaryOut:
+  repo = get_repository()
+  _, scope = _scope(doc_id, section_id)
+
+  if not refresh and (cached := repo.get_summary(doc_id, section_id)):
+    return SummaryOut(summary = cached, cached = True)
+
+  text = subtree_text(scope)
+  if len(text) < MIN_SUMMARY_CHARS:
+    return SummaryOut(summary = "_This section has to little text to summarize._", cached = False)
+
+  try:
+    summary = """   Summarizer logic here   """
+  except Exception as exc:
+    log.exception("Summary failed for %s/%s", doc_id, section_id)
+    raise HTTPException(status) from exc
+
+  return SummaryOut(summary=summary, cached=False)
