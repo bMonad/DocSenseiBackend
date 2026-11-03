@@ -16,6 +16,8 @@ from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
 from app.services.pdf_parser import parse_pdf
 from app.services.vectorstore import ensure_indexed
+from app.services.llm import describe__llm_error
+from app.services.summarizer import summarize_section
 
 log = logging.getLogger(__name__)
 
@@ -121,9 +123,11 @@ def section_summary(doc_id: str, section_id: str, refresh: bool = False) -> Summ
     return SummaryOut(summary = "_This section has to little text to summarize._", cached = False)
 
   try:
-    summary = """   Summarizer logic here   """
+    summary = summarize_section(scope[0].title, text)
   except Exception as exc:
     log.exception("Summary failed for %s/%s", doc_id, section_id)
-    raise HTTPException(status) from exc
+    status_code, detail = describe__llm_error(exc)
+    raise HTTPException(status_code=status_code, detail=detail) from exc
 
+  repo.save_summary(doc_id, section_id, summary)
   return SummaryOut(summary=summary, cached=False)

@@ -68,10 +68,18 @@ class DocumentRepository:
     return path
 
   def get_summary(self, doc_id: str, section_id: str) -> str | None:
-    path = self._dir(doc_id) / "source.pdf"
+    path = self._dir(doc_id) / "summaries.json"
     if not path.exists():
-      raise DocumentNotFound(doc_id)
-    return path
+      return None
+    cache = json.loads(path.read_text(encoding="utf-8"))
+    return cache.get(section_id)
+
+  def save_summary(self, doc_id: str, section_id: str, summary: str) -> None:
+    path = self._dir(doc_id) / "summaries.json"
+    with self._lock:
+      cache = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+      cache[section_id] = summary
+      self._write_json(path, cache)
 
   @staticmethod
   def _write_json(path: Path, payload: object) -> None:
