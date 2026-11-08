@@ -1,0 +1,84 @@
+name: Build and deploy to DocSensei APIs to Cloud Run
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGION: ${{ vars.GCP_REGION }}
+  REPOSITORY: ${{ vars.GCP_REPOSITORY }}
+  SERVICE: ${{ vars.GCP_SERVICE }}
+  IMAGE_URI: "${REGION}-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY}/${SERVICE}:${GITHUB_SHA}"
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud with WIF
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+
+      - name: Authenticate Docker to Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        run: |
+          docker build --tag "$IMAGE_URI" .
+          docker push "$IMAGE_URI"
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: docsensei-backend
+          region: ${{ vars.GCP_REGION }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          image: ${{ env.IMAGE_URI }}
+          env_vars: |-
+            APP_NAME=DocSensei
+            APP_DESCRIPTION=AI-powered document assistant
+            APP_VERSION=1.0.0
+            DATA_DIR=/tmp/docsensei-data
+            MAX_UPLOAD_MB=25
+            MAX_PAGES=400
+            CORS_ORIGINS=["*"]
+          secrets: |-
+            GROQ_API_KEY=groq-api-key:latest
+          timeout: 300s
+          flags: >-
+            --memory=2Gi
+            --cpu=1
+            --min=0
+            --max=1
+            --concurrency=1
+            --timeout=300
+            --cpu-throttling
+            --service-account=${{ vars.GCP_RUNTIME_SA }}
+
+      - name: Get Cloud Run URL
+        run: |
+          gcloud run services describe "$SERVICE" \
+            --region="$REGION" \
+            --format="value(status.url)"
