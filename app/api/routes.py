@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.domain import Section, subtree, subtree_text
-from app.schemas import DocumentOut, SummaryOut
+from app.schemas import DocumentOut, SectionNode, SummaryOut
 from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
 from app.services.pdf_parser import parse_pdf
@@ -29,11 +29,30 @@ MIN_SUMMARY_CHARS = 80
 
 def _document_out(doc_id: str) -> DocumentOut:
   parsed = get_repository().load(doc_id)
+  nodes = {
+    section.id: SectionNode(
+      id=section.id,
+      title=section.title,
+      level=section.level,
+      page_start=section.page_start,
+      page_end=section.page_end,
+    )
+    for section in parsed.sections
+  }
+  outline: list[SectionNode] = []
+  for section in parsed.sections:
+    node = nodes[section.id]
+    parent = nodes.get(section.parent_id) if section.parent_id else None
+    if parent:
+      parent.children.append(node)
+    else:
+      outline.append(node)
+
   return DocumentOut(
     id = doc_id,
     title = parsed.title,
     page_count = parsed.page_count,
-    outline = []
+    outline = outline
   )
 
 
