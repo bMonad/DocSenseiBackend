@@ -1,6 +1,33 @@
-.venv/
-docenv/
-__pycache__/
-.env
 data/
 .pytest_cache/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+docenv/
+
+# Environment files
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Model cache
+.cache/
+models/
+huggingface_cache/
+
+# Generated files
+uploads/
+temp/
+*.log
+
+# Generated Google credentials
+gha-creds-*.json
