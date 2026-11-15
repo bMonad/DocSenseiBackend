@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import Any, cast
 from functools import lru_cache
 
 from langchain_chroma import Chroma
@@ -17,10 +18,10 @@ log = logging.getLogger(__name__)
 
 
 class LocalFastEmbeddings(Embeddings):
-  """LangChain-compatible embeddings backed by FastEmbed (ONNX, no PyTorch)."""
+  """LangChain-compatible local embeddings backed by FastEmbed/ONNX."""
 
-  def __init__(self, model_name: str, **kwargs) -> None:
-    self._model = TextEmbedding(model_name=model_name, **kwargs)
+  def __init__(self, model_name: str) -> None:
+    self._model = TextEmbedding(model_name=model_name)
     self._lock = threading.Lock()
 
   def embed_documents(self, texts: list[str]) -> list[list[float]]:
@@ -33,7 +34,7 @@ class LocalFastEmbeddings(Embeddings):
 
 
 @lru_cache
-def get_embeddings() -> LocalFastEmbeddings:
+def get_embeddings() -> Embeddings:
   settings = get_settings()
   log.info("Loading embedding model %s", settings.embedding_model)
   return LocalFastEmbeddings(model_name = settings.embedding_model)
@@ -84,3 +85,17 @@ def ensure_indexed(doc_id: str, sections: list[Section]) -> None:
   if docs:
     get_vectorstore().add_documents(docs, ids = ids)
   log.info("Indexed %d chunks for document %s", len(docs), doc_id)
+
+
+def retrieve(doc_id: str, section_ids: list[str], query: str, k: int | None = None) -> list[Document]:
+  """ MMR search (relevance + diversity) restricted to one document's section subtree."""
+
+  k = k or get_settings().retrieval_k
+  where: dict[str, Any] = {"$and": [{"doc_id": {"$eq": doc_id}}, {"section_id": {"$in": section_ids}}]}
+
+  return get_vectorstore().max_marginal_relevance_search(
+    query,
+    k=k,
+    fetch_k=k*4,
+    filter=cast(Any, where)
+  )

@@ -1,19 +1,22 @@
 from functools import lru_cache
 from pathlib import Path
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
   model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
   # App Profile
-  app_name: str
-  app_description: str
-  app_version: str
+  app_name: str = "DocSensei_API"
+  app_description: str = "AI-powered document assistant"
+  app_version: str = "1.0.0"
 
   # LLM (Groq)
   groq_api_key: str = ""
   groq_model: str = "qwen/qwen3.8-27b"
   groq_reasoning_effort: str = "none"
+  gemini_api_key: str = ""
+  gemini_model: str = "gemini-3.1-flash-lite"
 
   # Embeddings / vector store
   embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -24,7 +27,11 @@ class Settings(BaseSettings):
 
   # Limits
   max_upload_mb: int = 25
-  max_pages: int = 400
+  max_pages: int = 300
+  api_rate_limit_per_minute: int = Field(default=10, gt=0)
+  api_rate_limit_per_day: int = Field(default=100, gt=0)
+  api_global_rate_limit_per_minute: int = Field(default=24, gt=0)
+  api_global_rate_limit_per_day: int = Field(default=100, gt=0)
 
   # Context budgeting (characters, ~4 chars per token).
   # Sections that fit are sent whole; larger ones use retrieval / map-reduce.
@@ -32,8 +39,9 @@ class Settings(BaseSettings):
   summary_direct_chars: int = 20_000
   summary_max_parts: int = 8
   history_turns: int = 6
+  history_max_chars: int = 4_000
 
-  cors_origins: list[str] = ["http://localhost:5173"]
+  cors_origins: list[str] = ["http://localhost:5173", "https://docsensei-ai.web.app/"]
 
 @lru_cache
 def get_settings() -> Settings:

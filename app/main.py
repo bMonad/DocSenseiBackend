@@ -47,7 +47,8 @@ app.add_middleware(
 
 
 @app.exception_handler(DocumentNotFound)
-async def document_not_found(_: Request, __: DocumentNotFound) -> JSONResponse:
+async def document_not_found(_: Request, _exc: DocumentNotFound) -> JSONResponse:
+  del _exc
   return JSONResponse(
     {
     "detail": "Document not found!"

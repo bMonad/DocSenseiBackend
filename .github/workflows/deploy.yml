@@ -75,6 +75,7 @@ jobs:
             --concurrency=1
             --timeout=300
             --cpu-throttling
+            --no-invoker-iam-check
             --service-account=${{ vars.GCP_RUNTIME_SA }}
 
       - name: Get Cloud Run URL

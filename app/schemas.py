@@ -1,21 +1,24 @@
 from __future__ import annotations
-from typing import Literal
+from typing import Literal, TypedDict
 from pydantic import BaseModel, Field
 
 
-class SectionNode(BaseModel):
+class SectionNode(TypedDict):
   id: str
   title: str
   level: int
   page_start: int
   page_end: int
-  children: list[SectionNode] = Field(default_factory=list)
+  children: list["SectionNode"]
 
 
 class DocumentOut(BaseModel):
   id: str
   title: str
-  page_count: int
+  page_count: int | None
+  source_type: str = "pdf"
+  unit_count: int = 0
+  unit_label: str = "pages"
   outline: list[SectionNode]
 
 
