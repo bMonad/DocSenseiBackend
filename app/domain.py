@@ -19,6 +19,9 @@ class ParsedDocument:
   title: str
   page_count: int
   sections: list[Section]
+  source_type: str = "pdf"
+  unit_count: int = 0
+  unit_label: str = "pages"
 
 
 def subtree(sections: list[Section], section_id: str) -> list[Section]:
