@@ -34,8 +34,9 @@ class DocumentRepository:
     self._lock = threading.Lock()
 
   @staticmethod
-  def make_id(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()[:16]
+  def make_id(data: bytes, source_type: str = "pdf") -> str:
+    payload = data if source_type == "pdf" else source_type.encode("utf-8") + b"\0" + data
+    return hashlib.sha256(payload).hexdigest()[:16]
 
   def _dir(self, doc_id: str) -> Path:
     if not _DOC_ID.match(doc_id):
@@ -45,13 +46,20 @@ class DocumentRepository:
   def exists(self, doc_id: str) -> bool:
     return (self._dir(doc_id) / "document.json").exists()
 
-  def save(self, doc_id: str, parsed: ParsedDocument, pdf_bytes: bytes) -> None:
+  def save(self, doc_id: str, parsed: ParsedDocument, data: bytes, extension: str) -> None:
     folder = self._dir(doc_id)
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "source.pdf").write_bytes(pdf_bytes)
+    (folder / f"source{extension}").write_bytes(data)
     self._write_json(
       folder / "document.json",
-      {"title": parsed.title, "page_count": parsed.page_count, "sections": [asdict(s) for s in parsed.sections]}
+      {
+        "title": parsed.title, 
+        "page_count": parsed.page_count,
+        "sections": [asdict(s) for s in parsed.sections],
+        "source_type": parsed.source_type,
+        "unit_count": parsed.unit_count,
+        "unit_label": parsed.unit_label
+      },
     )
 
   def load(self, doc_id: str) -> ParsedDocument:
@@ -59,7 +67,14 @@ class DocumentRepository:
     if not path.exists():
       raise DocumentNotFound(doc_id)
     raw = json.loads(path.read_text(encoding = "utf-8"))
-    return ParsedDocument(raw["title"], raw["page_count"], [Section(**s) for s in raw["sections"]])
+    return ParsedDocument(
+      raw["title"], 
+      raw["page_count"], 
+      [Section(**s) for s in raw["sections"]],
+      raw.get("source_type", "pdf"),
+      raw.get("unit_count", raw["page_count"]),
+      raw.get("unit_label", "pages"),
+    )
 
   def pdf_path(self, doc_id: str) -> Path:
     path = self._dir(doc_id) / "source.pdf"

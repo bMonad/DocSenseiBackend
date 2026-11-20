@@ -7,13 +7,14 @@ from datetime import datetime, timezone
 
 import pymupdf
 from fastapi import APIRouter, HTTPException, File, UploadFile, status, Query, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 
 from app.config import get_settings
-from app.domain import Section, subtree, subtree_text
+from app.domain import Section, subtree, subtree_text, to_outline
 from app.schemas import DocumentOut, SectionNode, SummaryOut
 from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
+from app.services.document_parser import SUPPORTED_TYPES
 from app.services.pdf_parser import parse_pdf
 from app.services.vectorstore import ensure_indexed
 from app.services.llm import describe__llm_error
@@ -29,30 +30,15 @@ MIN_SUMMARY_CHARS = 80
 
 def _document_out(doc_id: str) -> DocumentOut:
   parsed = get_repository().load(doc_id)
-  nodes = {
-    section.id: SectionNode(
-      id=section.id,
-      title=section.title,
-      level=section.level,
-      page_start=section.page_start,
-      page_end=section.page_end,
-    )
-    for section in parsed.sections
-  }
-  outline: list[SectionNode] = []
-  for section in parsed.sections:
-    node = nodes[section.id]
-    parent = nodes.get(section.parent_id) if section.parent_id else None
-    if parent:
-      parent.children.append(node)
-    else:
-      outline.append(node)
-
+  
   return DocumentOut(
     id = doc_id,
     title = parsed.title,
-    page_count = parsed.page_count,
-    outline = outline
+    page_count = parsed.page_count if parsed.source_type == "pdf" else None,
+    source_type = parsed.source_type,
+    unit_count = parsed.unit_count,
+    unit_label = parsed.unit_label,
+    outline = to_outline(parsed.sections)
   )
 
 
@@ -90,8 +76,12 @@ def upload_document(file: UploadFile = File(...)) -> DocumentOut:
 
   if len(data) > limit:
     raise HTTPException(status.HTTP_413_CONTENT_TOO_LARGE, f"File is larger than {settings.max_upload_mb} MB.")
-  if not data.startswith(b"%PDF-"):
-    raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, "Only PDF files are supported.")
+  filename = file.filename or "Untitled"
+  extension = Path(filename).suffix.lower()
+  source_type = SUPPORTED_TYPES.get(extension)
+  if source_type is None:
+    supported = ", ".join(SUPPORTED_TYPES)
+    raise HTTPException(status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, f"Unsupported file type. Supported extensions: {supported}.")
 
   doc_id = repo.make_id(data)
   if not repo.exists(doc_id):
@@ -99,7 +89,7 @@ def upload_document(file: UploadFile = File(...)) -> DocumentOut:
       parsed = parse_pdf(data, fallback_title=Path(file.filename or "Untitled").stem, max_pages = settings.max_pages)
     except ValueError as exc:
       raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
-    repo.save(doc_id, parsed, data)
+    repo.save(doc_id, parsed, data, extension)
 
   ensure_indexed(doc_id, repo.load(doc_id).sections)
   return _document_out(doc_id)

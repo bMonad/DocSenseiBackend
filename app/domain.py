@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
+from app.schemas import SectionNode
 
 @dataclass
 class Section:
@@ -37,3 +37,23 @@ def subtree(sections: list[Section], section_id: str) -> list[Section]:
 
 def subtree_text(scope: list[Section]) -> str:
   return "\n\n".join(s.own_text for s in scope if s.own_text).strip()
+
+def to_outline(sections: list[Section]) -> list[SectionNode]:
+  """Flat, ordered sections -> nested tree for the sidebar."""
+  roots: list[SectionNode] = []
+  stack: list[SectionNode] = []
+  for s in sections:
+    node: SectionNode = {
+      "id": s.id,
+      "title": s.title,
+      "level": s.level,
+      "page_start": s.page_start,
+      "page_end": s.page_end,
+      "children": []
+    }
+
+    while stack and stack[-1]["level"] >= s.level:
+      stack.pop()
+    (stack[-1]["children"] if stack else roots).append(node)
+    stack.append(node)
+  return roots
