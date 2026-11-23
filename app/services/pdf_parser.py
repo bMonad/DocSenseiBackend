@@ -15,6 +15,7 @@ import logging
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from typing import Any, cast
 import pymupdf
 
 from app.domain import ParsedDocument, Section
@@ -61,17 +62,18 @@ def extract_lines(doc: pymupdf.Document) -> list[Line]:
   for index in range(doc.page_count):
     page = doc[index]
     height = page.rect.height or 1.0
-    for block in page.get_text("dict", sort="True")["blocks"]:
+    page_text = cast(Any, page.get_text("dict", sort="True"))
+    for block in page_text.get(["blocks"], []):
       if block.get("type") != 0:
         continue
-      for raw in block["lines"]:
-        spans = [s for s in raw["spans"] if s["text"].strip()]
+      for raw in block.get("lines", []):
+        spans = [s for s in raw.get("spans", []) if s.get("text", "").strip()]
         if not spans:
           continue
-        text = re.sub(r"\s+", " ", "".join(s["text"] for s in spans)).strip()
-        dominant = max(spans, key=lambda s: len(s["text"]))
-        bold = bool(dominant["flags"] & BOLD_FLAG) or "bold" in dominant["font"].lower()
-        lines.append(Line(index + 1, raw["bbox"][1] / height, text, float(dominant["size"]), bold))
+        text = re.sub(r"\s+", " ", "".join(s.get("text", "") for s in spans)).strip()
+        dominant = max(spans, key=lambda s: len(s.get("text", "")))
+        bold = bool(dominant.get("flags", 0) & BOLD_FLAG) or "bold" in str(dominant.get("font", "")).lower()
+        lines.append(Line(index + 1, raw.get("bbox", [0, 0, 0, 0])[1] / height, text, float(dominant.get("size", 0)), bold))
   return lines
 
 

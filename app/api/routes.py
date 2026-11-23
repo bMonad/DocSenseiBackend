@@ -14,8 +14,7 @@ from app.domain import Section, subtree, subtree_text, to_outline
 from app.schemas import DocumentOut, SectionNode, SummaryOut
 from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
-from app.services.document_parser import SUPPORTED_TYPES
-from app.services.pdf_parser import parse_pdf
+from app.services.document_parser import SUPPORTED_TYPES, parse_document
 from app.services.vectorstore import ensure_indexed
 from app.services.llm import describe__llm_error
 from app.services.summarizer import summarize_section
@@ -86,7 +85,7 @@ def upload_document(file: UploadFile = File(...)) -> DocumentOut:
   doc_id = repo.make_id(data)
   if not repo.exists(doc_id):
     try: 
-      parsed = parse_pdf(data, fallback_title=Path(file.filename or "Untitled").stem, max_pages = settings.max_pages)
+      parsed = parse_document(data, filename, max_pages = settings.max_pages)
     except ValueError as exc:
       raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     repo.save(doc_id, parsed, data, extension)
@@ -102,19 +101,32 @@ def get_document(doc_id: str) -> DocumentOut:
   return _document_out(doc_id)
 
 
-# ------ Retrieve Image of page ------ 
+# ------ Render the file ------ 
 
-@router.get("/document/{doc_id}/pages/{page}/image")
-def page_image(doc_id: str, page: int, scale: float = Query(1.6, ge = 0.5, le = 3.0)) -> Response:
-  path = get_repository().pdf_path(doc_id)
-  with pymupdf.open(path) as pdf:
-    if not 1 <= page <= pdf.page_count:
-      raise HTTPException(status.HTTP_404_NOT_FOUND, "Page Not Found!")
-    pixmap = pdf[page - 1].get_pixmap(matrix = pymupdf.Matrix(scale, scale), alpha = False)
-    png = pixmap.tobytes("png")
-  return Response(png, media_type = "image/png", headers = {
-    "Cache-Control": "public, max-age=86400, immutable"
-  })
+@router.get("/document/{doc_id}/file")
+def document_file(doc_id: str) -> FileResponse:
+  repo = get_repository()
+  if repo.load(doc_id).source_type  != "pdf":
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "PDF file is not available for this document.")
+  return FileResponse(
+    repo.pdf_path(doc_id),
+    media_type="application/pdf",
+    filename="document.pdf",
+    content_disposition_type="inline",
+    headers={
+      "Accept-Ranges": "bytes",
+      "Cache-Control": "private, max-age=86400, immutable",
+      "X-Content-Type-Options": "nosniff",
+    },
+  )
+
+
+# ------ Section Content Endpoint ------
+
+@router.get("/documents/{doc_id}/sections/{section_id}/content")
+def section_content(doc_id: str, section_id: str) -> dict[str, str]:
+    _, scope = _scope(doc_id, section_id)
+    return {"content": subtree_text(scope)}
 
 
 # ------ Section Summary Endpoint ------
