@@ -50,7 +50,7 @@ class ApiRateLimiter:
         requests.append(now)
         if len(scopes) == 2:
           self._global_requests.append(now)
-        self._chunks += 1
-        if self._chunks % 256 == 0:
+        self._checks += 1
+        if self._checks % 256 == 0:
           self._requests = {key: values for key, values in self._requests.items() if values}
         return None

@@ -62,8 +62,8 @@ def extract_lines(doc: pymupdf.Document) -> list[Line]:
   for index in range(doc.page_count):
     page = doc[index]
     height = page.rect.height or 1.0
-    page_text = cast(Any, page.get_text("dict", sort="True"))
-    for block in page_text.get(["blocks"], []):
+    page_text = cast(Any, page.get_text("dict", sort=True))
+    for block in page_text.get("blocks", []):
       if block.get("type") != 0:
         continue
       for raw in block.get("lines", []):

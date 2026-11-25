@@ -5,19 +5,19 @@ import logging
 from pathlib import Path
 from datetime import datetime, timezone
 
-import pymupdf
-from fastapi import APIRouter, HTTPException, File, UploadFile, status, Query, Response
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import APIRouter, HTTPException, File, UploadFile, status
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 
 from app.config import get_settings
 from app.domain import Section, subtree, subtree_text, to_outline
-from app.schemas import DocumentOut, SectionNode, SummaryOut
+from app.schemas import DocumentOut, SummaryOut, ChatRequest
 from app.services.vectorstore import is_embeddings_loaded
 from app.services.repository import get_repository
 from app.services.document_parser import SUPPORTED_TYPES, parse_document
 from app.services.vectorstore import ensure_indexed
 from app.services.llm import describe__llm_error
 from app.services.summarizer import summarize_section
+from app.services.chat import stream_answer
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,11 @@ def _scope(doc_id: str, section_id: str) -> tuple[list[Section], list[Section]]:
     return all_sections, subtree(all_sections, section_id)
   except KeyError:
     raise HTTPException(status.HTTP_404_NOT_FOUND, "Section not found!") from None
+
+
+def _require_leaf_section(scope: list[Section]) -> None:
+  if len(scope) > 1:
+    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Summary and chat are only available for sections without subsections.")
 
 
 # ------ Health Check Endpoint ------
@@ -135,20 +140,46 @@ def section_content(doc_id: str, section_id: str) -> dict[str, str]:
 def section_summary(doc_id: str, section_id: str, refresh: bool = False) -> SummaryOut:
   repo = get_repository()
   _, scope = _scope(doc_id, section_id)
+  _require_leaf_section(scope)
 
   if not refresh and (cached := repo.get_summary(doc_id, section_id)):
     return SummaryOut(summary = cached, cached = True)
 
   text = subtree_text(scope)
   if len(text) < MIN_SUMMARY_CHARS:
-    return SummaryOut(summary = "_This section has to little text to summarize._", cached = False)
+    return SummaryOut(summary = "_This section has too little text to summarize._", cached = False)
 
   try:
     summary = summarize_section(scope[0].title, text)
   except Exception as exc:
     log.exception("Summary failed for %s/%s", doc_id, section_id)
     status_code, detail = describe__llm_error(exc)
-    raise HTTPException(status_code=status_code, detail=detail) from exc
+    raise HTTPException(status_code, detail) from exc
 
   repo.save_summary(doc_id, section_id, summary)
   return SummaryOut(summary=summary, cached=False)
+
+
+# ------ Chat Endpoint ------
+
+@router.post("/documents/{doc_id}/sections/{section_id}/chat")
+async def section_chat(doc_id: str, section_id: str, body: ChatRequest) -> StreamingResponse:
+  all_sections, scope = _scope(doc_id, section_id)
+  _require_leaf_section(scope)
+  history = [turn.model_dump() for turn in body.history]
+
+  async def events():
+    try:
+      async for token in stream_answer(doc_id, all_sections, scope, body.question, history):
+        yield f"data: {json.dumps({'token': token})}\n\n"
+      yield "data: [DONE]\n\n"
+    except Exception as exc:
+      log.exception("Chat failed for %s/%s", doc_id, section_id)
+      _, message = describe__llm_error(exc)
+      yield f"data: {json.dumps({'error': message})}\n\n"
+
+  return StreamingResponse(
+    events(),
+    media_type="text/event-stream",
+    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+  )
