@@ -6,6 +6,11 @@ from functools import lru_cache
 from fastapi import status
 
 from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.rate_limiters import InMemoryRateLimiter
+from langchain_core.runnables import Runnable
+from pydantic import SecretStr
+from groq import RateLimitError
 
 from app.config import get_settings
 
@@ -15,19 +20,38 @@ class LLMConfigError(RuntimeError):
 
 
 @lru_cache
-def get_llm() -> ChatGroq:
+def get_llm() -> Runnable:
   settings = get_settings()
   if not settings.groq_api_key:
     raise LLMConfigError("GROQ_API_KEY is not set. Add it to .env and restart the server.")
-  return ChatGroq(
+  groq_llm = ChatGroq(
     model = settings.groq_model,
-    api_key = settings.groq_api_key,
+    api_key = SecretStr(settings.groq_api_key),
     temperature = 0.2,
-    max_retries = 3,
+    max_tokens=1024,
+    max_retries = 0,
     timeout = 60,
+    rate_limiter=InMemoryRateLimiter(
+      requests_per_second=0.4,
+      check_every_n_seconds=0.1,
+      max_bucket_size=1,
+    ),
     reasoning_format = "hidden",
     reasoning_effort = settings.groq_reasoning_effort,
   )
+
+  if not settings.gemini_api_key:
+    return groq_llm
+
+  gemini_llm = ChatGoogleGenerativeAI(
+    model=settings.gemini_model,
+    google_api_key=SecretStr(settings.gemini_api_key),
+    temperature=0.2,
+    max_output_tokens=1024,
+    max_retries=0,
+  )
+
+  return groq_llm.with_fallbacks([gemini_llm], exceptions_to_handle=(RateLimitError,))
 
 
 def strip_think(text: str) -> str:
